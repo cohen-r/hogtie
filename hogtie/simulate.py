@@ -9,6 +9,7 @@ import toytree
 import pandas as pd
 import numpy as np
 from scipy.stats import zscore
+from scipy.stats import chi2
 from hogtie import MatrixParser
 
 class Hogtie:
@@ -41,8 +42,9 @@ class Hogtie:
         #run the Binary State model on the matrix and get likelihoods
         null = MatrixParser(tree=self.tree, matrix=null_genos, model=self.model)
         null.matrix_likelihoods()
+        self.null_likelihoods = null.likelihoods
 
-        #get z-scores null likelihood expectations
+        #get mean and sd of null likelihood expectations
         sigma = null.likelihoods.std()
         mu = null.likelihoods.mean()
         self.sigma = sigma
@@ -55,7 +57,19 @@ class Hogtie:
         from simulated likelihood z-score
         """
         #get the likelihood value that corresponds to the z-score of 3 in simulations
-        high_lik = self.mu + 2*self.sigma
+        #high_lik = self.mu + 2*self.sigma
+
+        #get aic values for null
+        aic_list_null = []
+        for lik in self.null_likelihoods:
+            aic = 2*lik+2*2
+            aic_list_null.append(aic)
+
+        aic_list_null = np.array(aic_list_null)
+        aic_mean = aic_list_null.mean()
+        aic_std = aic_list_null.std()
+
+        print(aic_mean, aic_std)
 
         lik_calc = MatrixParser(tree=self.tree,
                                model=self.model,
@@ -64,19 +78,51 @@ class Hogtie:
                                )
 
         lik_calc.matrix_likelihoods()
-        
-        #I don't think we should expect much deviation among log-likelihoods
-        #a better signficance test is probably a likelihood-ratio test
+
+        #aic calculation
+        aic_list = []
+        for lik in lik_calc.likelihoods:
+            aic = 2*lik+2*2
+            aic_list.append(aic)
+
+        mean_aic = 2*self.mu+2*2
+
+        print(mean_aic)
+
+        aic_sd = 2*self.sigma+2*2
+
+        print(aic_sd)
+
         devs = [] #would prefer to append to an empty np.array
-        for like in lik_calc.likelihoods:
-            if like >= high_lik:
+        for aic in aic_list:
+            if aic >= (mean_aic+3):
                 devs.append(1)
             else:
                 devs.append(0)
+        
+        #self.deviations = devs
 
-        self.deviations = devs
+        #likelihood ratio test
+        #p_values = []
+        #or lik in lik_calc.likelihoods:
+        #    G = 2 * (lik - self.mu)
+        #    p_value = chi2.sf(G, 1) #what is the df in my case??
+        #    p_values.append(p_value)
 
-    def genome_graph(self):
+        #print(p_values)
+        
+        #I don't think we should expect much deviation among log-likelihoods
+        #a better signficance test is probably a likelihood-ratio test
+        #devs = [] #would prefer to append to an empty np.array
+        #for like in lik_calc.likelihoods:
+        #    if like >= high_lik:
+        #        devs.append(1)
+        #    else:
+        #        devs.append(0)
+
+        #self.deviations = devs
+
+    # def genome_graph(self):
         """
         Graphs rolling average of likelihoods along the linear genome, identifies 
         regions that deviate significantly from null expectations
@@ -102,8 +148,6 @@ if __name__ == "__main__":
     mod1.sim_loci(nloci=1, nsites=100000)
     genos1 = mod1.write_vcf()
     data=genos1.iloc[:, 9:].T
-    print(data)
     test = Hogtie(tree=testtree, model='ARD', matrix=data)
     test.create_null()
-    test.cutoff()
-    print(test.deviations)
+    test.significance_test()
