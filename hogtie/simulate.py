@@ -60,16 +60,16 @@ class Hogtie:
         #high_lik = self.mu + 2*self.sigma
 
         #get aic values for null
-        aic_list_null = []
-        for lik in self.null_likelihoods:
-            aic = 2*lik+2*2
-            aic_list_null.append(aic)
+        #aic_list_null = []
+        #for lik in self.null_likelihoods:
+        #    aic = 2*lik+2*2
+        #    aic_list_null.append(aic)
 
-        aic_list_null = np.array(aic_list_null)
-        aic_mean = aic_list_null.mean()
-        aic_std = aic_list_null.std()
+        #aic_list_null = np.array(aic_list_null)
+        #aic_mean = aic_list_null.mean()
+        #aic_std = aic_list_null.std()
 
-        print(aic_mean, aic_std)
+        #print(aic_mean, aic_std)
 
         lik_calc = MatrixParser(tree=self.tree,
                                model=self.model,
@@ -80,36 +80,36 @@ class Hogtie:
         lik_calc.matrix_likelihoods()
 
         #aic calculation
-        aic_list = []
-        for lik in lik_calc.likelihoods:
-            aic = 2*lik+2*2
-            aic_list.append(aic)
+        #aic_list = []
+        #for lik in lik_calc.likelihoods:
+        #    aic = 2*lik+2*2
+        #    aic_list.append(aic)
 
-        mean_aic = 2*self.mu+2*2
+        #mean_aic = 2*self.mu+2*2
 
-        print(mean_aic)
+        #print(mean_aic)
 
-        aic_sd = 2*self.sigma+2*2
+        #aic_sd = 2*self.sigma+2*2
 
-        print(aic_sd)
+        #print(aic_sd)
 
-        devs = [] #would prefer to append to an empty np.array
-        for aic in aic_list:
-            if aic >= (mean_aic+3):
-                devs.append(1)
-            else:
-                devs.append(0)
+        #devs = [] #would prefer to append to an empty np.array
+        #for aic in aic_list:
+        #    if aic >= (mean_aic+3):
+        #       devs.append(1)
+        #    else:
+        #        devs.append(0)
         
         #self.deviations = devs
 
         #likelihood ratio test
-        #p_values = []
-        #or lik in lik_calc.likelihoods:
-        #    G = 2 * (lik - self.mu)
-        #    p_value = chi2.sf(G, 1) #what is the df in my case??
-        #    p_values.append(p_value)
+        p_values = []
+        for lik in lik_calc.likelihoods:
+            G = 2 * (lik - self.mu)
+            p_value = chi2.sf(G, 0) #what is the df in my case??
+            p_values.append(p_value)
 
-        #print(p_values)
+        print(p_values)
         
         #I don't think we should expect much deviation among log-likelihoods
         #a better signficance test is probably a likelihood-ratio test
