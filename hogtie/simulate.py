@@ -45,10 +45,8 @@ class Hogtie:
         self.null_likelihoods = null.likelihoods
 
         #get mean and sd of null likelihood expectations
-        sigma = null.likelihoods.std()
-        mu = null.likelihoods.mean()
-        self.sigma = sigma
-        self.mu = mu
+        self.std = null.likelihoods[0].std()
+        self.mean = null.likelihoods[0].mean()
 
 
     def significance_test(self):
@@ -79,50 +77,31 @@ class Hogtie:
 
         lik_calc.matrix_likelihoods()
 
-        #aic calculation
-        #aic_list = []
-        #for lik in lik_calc.likelihoods:
-        #    aic = 2*lik+2*2
-        #    aic_list.append(aic)
-
-        #mean_aic = 2*self.mu+2*2
-
-        #print(mean_aic)
-
-        #aic_sd = 2*self.sigma+2*2
-
-        #print(aic_sd)
-
-        #devs = [] #would prefer to append to an empty np.array
-        #for aic in aic_list:
-        #    if aic >= (mean_aic+3):
-        #       devs.append(1)
-        #    else:
-        #        devs.append(0)
-        
-        #self.deviations = devs
-
         #likelihood ratio test
         p_values = []
-        for lik in lik_calc.likelihoods:
-            G = 2 * (lik - self.mu)
-            p_value = chi2.sf(G, 0) #what is the df in my case??
+        for lik in lik_calc.likelihoods[0]:
+            lik_ratio = 2 * (lik - self.mean)
+            p_value = chi2.sf(lik_ratio, df=1) #df set according to Felsenstein 2003 (pg.309)
             p_values.append(p_value)
 
-        print(p_values)
+        p_values = np.array(p_values)
+        lik_calc.likelihoods['lrt_p_values'] = p_values
         
-        #I don't think we should expect much deviation among log-likelihoods
-        #a better signficance test is probably a likelihood-ratio test
-        #devs = [] #would prefer to append to an empty np.array
-        #for like in lik_calc.likelihoods:
-        #    if like >= high_lik:
-        #        devs.append(1)
-        #    else:
-        #        devs.append(0)
+        #find deviations --> move deviations to genome_graph?
+        devs = [] #would prefer to append to an empty np.array
+        for value in lik_calc.likelihoods['lrt_p_values']:
+            if value >= 0.05:
+                devs.append(0)
+            else:
+                devs.append(1)
 
-        #self.deviations = devs
+        devs = np.array(devs)
+        lik_calc.likelihoods['deviation_score'] = devs
 
-    # def genome_graph(self):
+        print(lik_calc.likelihoods)
+        self.likehood_df = like_calc.likelihoods
+
+    def genome_graph(self):
         """
         Graphs rolling average of likelihoods along the linear genome, identifies 
         regions that deviate significantly from null expectations
@@ -131,16 +110,16 @@ class Hogtie:
         class
         """
 
-        #self.likelihoods['rollingav']= self.likelihoods.rolling(10, win_type='triang').mean()
+        self.likelihoods['rollingav']= self.likelihoods[1].rolling(10, win_type='triang').mean()
         
-        #plot = toyplot.plot(
-        #    self.likelihoods['rollingav'],
-        #    width = 500,
-        #    height=500,
-        #    color = 'blue'
-        #)
+        plot = toyplot.plot(
+            self.likelihoods['rollingav'],
+            width = 500,
+            height=500,
+            color = 'blue'
+        )
 
-        #return plot
+        return plot
 
 if __name__ == "__main__":
     testtree = toytree.rtree.unittree(ntips=10)
