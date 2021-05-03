@@ -10,7 +10,7 @@ import toytree
 import toyplot
 import pandas as pd #assuming matrix will be a pandas df
 from loguru import logger
-from hogtie.binary_state_model import BinaryStateModel
+from hogtie import BinaryStateModel
 
 
 class MatrixParser:
@@ -86,12 +86,7 @@ class MatrixParser:
                     likelihoods = np.append(likelihoods, lik)
 
         self.likelihoods = pd.DataFrame(likelihoods)
-
-        #testing something in simulate
-        #self.likelihoods = likelihoods
         
-        logger.debug(f'Likelihoods for each column: {self.tree.get_node_values("likelihood",True,True)}')
-
     
 if __name__ == "__main__":
     import os

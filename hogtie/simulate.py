@@ -15,9 +15,9 @@ class SimulateNull():
     """
     Compare data to expectations
 
-    TO DO: Not sure standard deviation-based comparison is the best for
-    log-likelihoods from a statistical point of view. Maybe something more like
-    an AIC-type comparison or a likelihood-ratio test?
+    TO DO: 
+    - integrate genealogy-based reordering function before running MatrixParser on null sim
+    - why isn't sim_loci working within the function?
     """
     def __init__(self, tree, matrix, model=None, prior=0.5):
         self.model = model
@@ -33,16 +33,18 @@ class SimulateNull():
 
         self.treeheight = float(self.tree.treenode.height)
 
+        #high ILS
+        self.mod = ipcoal.Model(tree=self.tree, Ne=(self.treeheight ** 3))
+
+        logger.info('Initiated model')
+
     def null(self):
         """
         Simulates SNPs across the input tree to create the null expectation for likelihood
         scores and compares
         """
-        
-        #high ILS
-        mod = ipcoal.Model(tree=self.tree, Ne=(self.treeheight ** 3))
-        mod.sim_loci(nloci=1, nsites=10000)
-        null_genos = mod.write_vcf().iloc[:, 9:].T
+        self.mod.sim_snps(nsnps=10)
+        null_genos = self.mod.write_vcf().iloc[:, 9:].T
 
         #make sure matrix has only 0's and 1's
         for col in null_genos:
@@ -105,4 +107,4 @@ if __name__ == "__main__":
     file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
     test = SimulateNull(tree=testtree, model='ARD', matrix=file1)
     test.null()
-    test.genome_graph()
+    #test.genome_graph()
