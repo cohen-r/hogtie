@@ -55,9 +55,9 @@ class MatrixParser:
         self.model = model
         self.prior = prior
 
-        for i in self.matrix:
-          if i != 1 or 0:
-                raise ValueError('Only valid trait values are 0 and 1')
+        #for i in self.matrix:
+        #  if i != 1 or 0:
+        #        raise ValueError('Only valid trait values are 0 and 1')
 
     @property
     def unique_matrix(self):

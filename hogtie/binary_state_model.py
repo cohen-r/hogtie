@@ -5,11 +5,11 @@ Implements binary state markov model for ancestral character state reconstructio
 """
 
 import numpy as np
+import pandas as pd
 import toytree
 from scipy.optimize import minimize
 from scipy.linalg import expm
 from loguru import logger
-
 
 
 class BinaryStateModel:
@@ -43,8 +43,19 @@ class BinaryStateModel:
     def __init__(self, tree, data, model, prior=0.5):
       
         # store user inputs
-        self.tree = tree
-        self.data = data
+        if isinstance(tree, toytree.tree):
+            self.tree = tree
+        elif isinstance(tree, str):
+            self.tree = toytree.tree(tree, tree_format=0)
+        else: 
+            raise Exception('tree must be either a newick string or toytree object')
+
+
+        if isinstance(matrix, pd.DataFrame):
+            self.matrix = matrix  
+        else:
+            self.matrix = pd.read_csv(matrix, index_col=0)
+        
         self.model = model
         self.prior_root_is_1 = prior
 
@@ -57,9 +68,11 @@ class BinaryStateModel:
         if len(data) != tree.ntips:
             raise Exception('Matrix row number must equal ntips on tree')
 
-        # set likelihoods to 1 for data at tips, and None for internal
-        self.set_initial_likelihoods()
+        self.unique_matrix = pd.DataFrame(np.unique(self.matrix.to_numpy(), axis=1))
 
+        # set likelihoods to 1 for data at tips, and None for internal
+        for column in self.unique_matrix:
+            self.set_initial_likelihoods(data=self.unique_matrix[column])
 
     @property
     def qmat(self):
@@ -84,15 +97,15 @@ class BinaryStateModel:
         return qmat
 
 
-    def set_initial_likelihoods(self):
+    def set_initial_likelihoods(self, data):
         """
         Sets the observed states at the tips as attributes of the nodes.
         """
         # get values as lists of [0, 1] or [1, 0]
-        values = ([float(1 - i), float(i)] for i in self.data)
+        values = ([float(1 - i), float(i)] for i in data)
 
         # get range of tip idxs (0-ntips)
-        keys = range(0, len(self.data))
+        keys = range(0, len(data))
 
         # map values to tips {0:x, 1:y, 2:z...}
         valuesdict = dict(zip(keys, values))
@@ -164,6 +177,22 @@ class BinaryStateModel:
             self.prior_root_is_1 * root.likelihood[1]
         )
         return lik
+
+    def matrix_likelihoods(self):
+        """
+        Gets likelihoods for each column of the matrix
+        """
+        likelihoods = np.empty((0,len(self.matrix.columns)),float)
+        
+        for column in self.unique_matrix:
+            lik = self.pruning_algorithm()
+            logger.debug(f'Likes for each individual column are {lik}')
+
+            for col in self.matrix:
+                if list(self.matrix[col]) == list(self.unique_matrix[column]):
+                    likelihoods = np.append(likelihoods, lik)
+
+        self.likelihoods = pd.DataFrame(likelihoods)
 
 
     def optimize(self):
