@@ -40,7 +40,7 @@ class BinaryStateModel:
         Prior probability that the root state is 1 (default=0.5). Flat, uniform prior is assumed.
     """
 
-    def __init__(self, tree, data, model, prior=0.5):
+    def __init__(self, tree, matrix, model, prior=0.5):
       
         # store user inputs
         if isinstance(tree, toytree.tree):
@@ -65,14 +65,21 @@ class BinaryStateModel:
         self.beta = 1 / tree.treenode.height
         self.log_lik = 0.
 
-        if len(data) != tree.ntips:
+        if len(self.matrix.index) != self.tree.ntips:
             raise Exception('Matrix row number must equal ntips on tree')
 
         self.unique_matrix = pd.DataFrame(np.unique(self.matrix.to_numpy(), axis=1))
 
         # set likelihoods to 1 for data at tips, and None for internal
+        trees = []
         for column in self.unique_matrix:
-            self.set_initial_likelihoods(data=self.unique_matrix[column])
+            tre = self.set_initial_likelihoods(data=self.unique_matrix[column])
+            trees.append(tre)
+
+        self.tree_list = trees
+
+        for tree in self.tree_list:
+            logger.debug(f'tip likelihoods are {tree.get_node_values("likelihood", True, True)}')
 
     @property
     def qmat(self):
@@ -111,11 +118,13 @@ class BinaryStateModel:
         valuesdict = dict(zip(keys, values))
 
         # set as .likelihood attributes on tip nodes.
-        self.tree = self.tree.set_node_values(
+        new_tree = self.tree.set_node_values(
             feature="likelihood", 
             values=valuesdict,
             default=None,
         )
+
+        return new_tree
 
         logger.debug(f"set tips values: {valuesdict}")
 
@@ -159,24 +168,24 @@ class BinaryStateModel:
         logger.debug(f"node={nidx}; likelihood=[{anc_lik_0:.6f}, {anc_lik_1:.6f}]")
         node.likelihood = [anc_lik_0, anc_lik_1]
 
-    def pruning_algorithm(self):
+    def pruning_algorithm(self, tree):
         """
         Traverse tree from tips to root calculating conditional 
         likelihood at each internal node on the way, and compute final
         conditional likelihood at root based on priors for root state.
         """
         # traverse tree to get conditional likelihood estimate at root.
-        for node in self.tree.treenode.traverse("postorder"):
+        for node in tree.treenode.traverse("postorder"):
             if not node.is_leaf():
                 self.node_conditional_likelihood(node.idx)
 
         # multiply root prior times the conditional likelihood at root
-        root = self.tree.treenode
+        root = tree.treenode
         lik = (
             (1 - self.prior_root_is_1) * root.likelihood[0] + 
             self.prior_root_is_1 * root.likelihood[1]
         )
-        return lik
+        return -np.log(lik)
 
     def matrix_likelihoods(self):
         """
@@ -184,15 +193,26 @@ class BinaryStateModel:
         """
         likelihoods = np.empty((0,len(self.matrix.columns)),float)
         
-        for column in self.unique_matrix:
-            lik = self.pruning_algorithm()
-            logger.debug(f'Likes for each individual column are {lik}')
+        for tree in self.tree_list:
+            lik = self.pruning_algorithm(tree)
+            
+            #tree = tree.set_node_values(
+            #    'likelihood',
+            #    values={
+            #        node.idx: np.array(node.likelihood) / sum(node.likelihood)
+            #        for node in self.tree.idx_dict.values()
+            #    }
+            #)
 
-            for col in self.matrix:
-                if list(self.matrix[col]) == list(self.unique_matrix[column]):
-                    likelihoods = np.append(likelihoods, lik)
+            for column in self.unique_matrix:
+                for col in self.matrix:
+                    if list(self.matrix[col]) == list(self.unique_matrix[column]):
+                        likelihoods = np.append(likelihoods, lik)
 
-        self.likelihoods = pd.DataFrame(likelihoods)
+            self.likelihoods = pd.DataFrame(likelihoods)
+
+            lik_sum = sum(likelihoods)
+            return lik_sum
 
 
     def optimize(self):
@@ -247,14 +267,7 @@ class BinaryStateModel:
             raise Exception('model must be specified as either ARD or ER')
 
         # get scaled likelihood values
-        self.log_lik = result["negLogLik"]
-        self.tree = self.tree.set_node_values(
-            'likelihood',
-            values={
-                node.idx: np.array(node.likelihood) / sum(node.likelihood)
-                for node in self.tree.idx_dict.values()
-            }
-        )
+        
 
     def draw_states(self):
         """
@@ -284,11 +297,11 @@ def optim_func(params, model):
     """
     if model.model == 'ARD':
         model.alpha, model.beta = params
-        lik = model.pruning_algorithm()
+        lik = model.matrix_likelihoods()
 
     else:
         model.alpha = params[0]
-        lik = model.pruning_algorithm()
+        lik = model.matrix_likelihoods()
     
     return -lik
 
@@ -299,8 +312,11 @@ if __name__ == "__main__":
     set_loglevel("DEBUG")
     TREE = toytree.rtree.imbtree(ntips=10, treeheight=1000)
 
-    DATA = np.array([1, 1, 0, 0, 1, 0, 0, 0, 0, 1])
-    mod = BinaryStateModel(TREE, DATA, 'ER')
+    import os
+    HOGTIEDIR = os.path.dirname(os.getcwd())
+    tree1 = toytree.rtree.unittree(ntips=10)
+    file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
+    mod = BinaryStateModel(TREE, file1, 'ER')
     mod.optimize()
 
     #DATA = np.array([1, 0, 1, 0, 1, 0, 1, 0, 1, 0])
