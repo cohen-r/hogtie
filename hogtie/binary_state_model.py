@@ -16,18 +16,14 @@ class BinaryStateModel:
     """
     Ancestral State Reconstruction for discrete binary state characters
     on a phylogeny ... 
-
     alternative names: DiscreteMarkovModel
-
     The model is a discrete markov model implemented as described by Pagel (1994). This model
     is similar to that used in ace (R package, add: link); however, hogtie assumes a uniform
     prior at the root. Hogtie is designed to run across large-matrices corresponding to genetic
     variants identified in sequence data (kmers, snps, transcripts, etc.) and allows for visualization
     of inferred character states and likelihoods along a tree and genome of interest, respectively.
-
     Either an equal rates (ER, transition rate parameters are equal) or all rates different (ARD, 
     transition rate parameters are unequal) can be selected.
-
     Parameters
     ----------
     tree: newick string or toytree object
@@ -165,7 +161,6 @@ class BinaryStateModel:
         )
         return lik
 
-
     def optimize(self):
         """
         Use maximum likelihood optimization to find the optimal alpha
@@ -175,8 +170,8 @@ class BinaryStateModel:
         tree heights (e.g., 1) the max should likely be higher. If the 
         estimated parameters is at the max bound we should report a 
         logger.warning(message).
-        """  
-
+        """
+        
         if self.model == 'ARD':
             estimate = minimize(
             fun=optim_func,
