@@ -78,8 +78,8 @@ class BinaryStateModel:
 
         self.tree_list = trees
 
-        for tree in self.tree_list:
-            logger.debug(f'tip likelihoods are {tree.get_node_values("likelihood", True, True)}')
+        for tre in self.tree_list:
+            logger.debug(f'tip likelihoods are {tre.get_node_values("likelihood", True, True)}')
 
     @property
     def qmat(self):
