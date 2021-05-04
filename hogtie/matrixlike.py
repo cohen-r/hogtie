@@ -8,12 +8,13 @@ Runs BinaryStateModel on matrix of binary character state data for gwas data for
 import numpy as np
 import toytree
 import toyplot
-import pandas as pd #assuming matrix will be a pandas df
+import pandas as pd
+from scipy.optimize import minimize
 from loguru import logger
 from hogtie import BinaryStateModel
 
 
-class MatrixParser:
+class MatrixParser(BinaryStateModel):
     """
     Runs BinaryStateModel on matrix columns, returns a likelihood score for each column.
     The matrix should correspond to presence/absence data corresponding to sequence variants (this
@@ -55,9 +56,9 @@ class MatrixParser:
         self.model = model
         self.prior = prior
 
-        for i in self.matrix:
-          if i != 1 or 0:
-                raise ValueError('Only valid trait values are 0 and 1')
+        #for i in self.matrix:
+        #  if i != 1 or 0:
+        #        raise ValueError('Only valid trait values are 0 and 1')
 
     @property
     def unique_matrix(self):
@@ -75,23 +76,22 @@ class MatrixParser:
         """
         likelihoods = np.empty((0,len(self.matrix.columns)),float)
         for column in self.unique_matrix:
-            data = self.unique_matrix[column]
-            out = BinaryStateModel(self.tree, data, self.model, self.prior)
-            out.optimize()
-        
-            lik = out.log_lik
+            lik = -np.log(self.pruning_algorithm())
 
             for col in self.matrix:
                 if list(self.matrix[col]) == list(self.unique_matrix[column]):
                     likelihoods = np.append(likelihoods, lik)
 
+        lik_sum = sum(likelihoods)
         self.likelihoods = pd.DataFrame(likelihoods)
 
-       def optimize(self):
+        return lik_sum
+
+    def optimize(self):
         """
         Use maximum likelihood optimization to find the optimal alpha
         and beta model parameters to fit the data.
-
+          
         TODO: max bounds could be set based on tree height. For smaller
         tree heights (e.g., 1) the max should likely be higher. If the 
         estimated parameters is at the max bound we should report a 

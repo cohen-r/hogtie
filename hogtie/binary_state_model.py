@@ -10,8 +10,6 @@ from scipy.optimize import minimize
 from scipy.linalg import expm
 from loguru import logger
 
-
-
 class BinaryStateModel:
     """
     Ancestral State Reconstruction for discrete binary state characters
@@ -55,7 +53,6 @@ class BinaryStateModel:
 
         # set likelihoods to 1 for data at tips, and None for internal
         self.set_initial_likelihoods()
-
 
     @property
     def qmat(self):
@@ -161,102 +158,102 @@ class BinaryStateModel:
         )
         return lik
 
-    def optimize(self):
-        """
-        Use maximum likelihood optimization to find the optimal alpha
-        and beta model parameters to fit the data.
+#    def optimize(self):
+#        """
+#        Use maximum likelihood optimization to find the optimal alpha
+#        and beta model parameters to fit the data.
+#
+#        TODO: max bounds could be set based on tree height. For smaller
+#        tree heights (e.g., 1) the max should likely be higher. If the 
+#        estimated parameters is at the max bound we should report a 
+#        logger.warning(message).
+#        """
+#        
+#        if self.model == 'ARD':
+#            estimate = minimize(
+#            fun=optim_func,
+#            x0=np.array([self.alpha, self.beta]),
+#            args=(self,),
+#            method='L-BFGS-B',
+#            bounds=((0, 50), (0, 50)),
+#            )
+#        # logger.info(estimate)
+#
+#        # organize into a dict
+#            result = {
+#                "alpha": round(estimate.x[0], 6),
+#                "beta": round(estimate.x[1], 6), 
+#                "Lik": round(estimate.fun, 6),            
+#                "negLogLik": round(-np.log(-estimate.fun), 2),
+#                "convergence": estimate.success,
+#                }
+#            logger.info(result)
+#
+#        elif self.model == 'ER':
+#            estimate = minimize(
+#                fun=optim_func,
+#                x0=np.array([self.alpha]),
+#                args=(self,),
+#                method='L-BFGS-B',
+#                bounds=[(0, 50)],
+#            )
+#
+#            result = {
+#                "alpha": estimate.x[0],
+#                "Lik": estimate.fun,            
+#                "negLogLik": -np.log(-estimate.fun),
+#                "convergence": estimate.success,
+#                }
+#            logger.info(result)
 
-        TODO: max bounds could be set based on tree height. For smaller
-        tree heights (e.g., 1) the max should likely be higher. If the 
-        estimated parameters is at the max bound we should report a 
-        logger.warning(message).
-        """
-        
-        if self.model == 'ARD':
-            estimate = minimize(
-            fun=optim_func,
-            x0=np.array([self.alpha, self.beta]),
-            args=(self,),
-            method='L-BFGS-B',
-            bounds=((0, 50), (0, 50)),
-            )
-        # logger.info(estimate)
+#        else:
+#            raise Exception('model must be specified as either ARD or ER')
 
-        # organize into a dict
-            result = {
-                "alpha": round(estimate.x[0], 6),
-                "beta": round(estimate.x[1], 6), 
-                "Lik": round(estimate.fun, 6),            
-                "negLogLik": round(-np.log(-estimate.fun), 2),
-                "convergence": estimate.success,
-                }
-            logger.info(result)
-
-        elif self.model == 'ER':
-            estimate = minimize(
-                fun=optim_func,
-                x0=np.array([self.alpha]),
-                args=(self,),
-                method='L-BFGS-B',
-                bounds=[(0, 50)],
-            )
-
-            result = {
-                "alpha": estimate.x[0],
-                "Lik": estimate.fun,            
-                "negLogLik": -np.log(-estimate.fun),
-                "convergence": estimate.success,
-                }
-            logger.info(result)
-
-        else:
-            raise Exception('model must be specified as either ARD or ER')
-
-        # get scaled likelihood values
-        self.log_lik = result["negLogLik"]
-        self.tree = self.tree.set_node_values(
-            'likelihood',
-            values={
-                node.idx: np.array(node.likelihood) / sum(node.likelihood)
-                for node in self.tree.idx_dict.values()
-            }
-        )
-
-    def draw_states(self):
-        """
-        Draw tree with nodes colored by state
-        """
-        drawing = self.tree.draw(
-            width=400,
-            height=300,
-            layout='d',
-            node_labels=("idx", 1, 1),
-            node_sizes=15,
-            node_style={"stroke": "black", "stroke-width": 2},
-            node_colors=[
-                toytree.colors[int(round(i[1]))] if isinstance(i, (list, np.ndarray))
-                else "white" 
-                for i in self.tree.get_node_values("likelihood", True, True)
-            ],
-        )
-        return drawing
+#       # get scaled likelihood values
+#       self.log_lik = result["negLogLik"]
+#       self.tree = self.tree.set_node_values(
+#           'likelihood',
+#            values={
+#               node.idx: np.array(node.likelihood) / sum(node.likelihood)
+#                for node in self.tree.idx_dict.values()
+#            }
+#        )
+#
+#    def draw_states(self):
+#        """
+#        Draw tree with nodes colored by state
+#        """
+#        drawing = self.tree.draw(
+#            width=400,
+#            height=300,
+#            layout='d',
+#            node_labels=("idx", 1, 1),
+#            node_sizes=15,
+#            node_style={"stroke": "black", "stroke-width": 2},
+#            node_colors=[
+#               toytree.colors[int(round(i[1]))] if isinstance(i, (list, np.ndarray))
+#                else "white" 
+#               for i in self.tree.get_node_values("likelihood", True, True)
+#           ],
+#        )
+#        return drawing
 
 
-def optim_func(params, model):
-    """
-    Function to optimize. Takes an iterable as the first argument 
-    containing the parameters to be estimated (alpha, beta), and the
-    BinaryStateModel class instance as the second argument.
-    """
-    if model.model == 'ARD':
-        model.alpha, model.beta = params
-        lik = model.pruning_algorithm()
-
-    else:
-        model.alpha = params[0]
-        lik = model.pruning_algorithm()
-    
-    return -lik
+# def optim_func(params, model):
+#    """
+#    Function to optimize. Takes an iterable as the first argument 
+#    containing the parameters to be estimated (alpha, beta), and the
+#    BinaryStateModel class instance as the second argument.
+#    """
+#    if model.model == 'ARD':
+#        model.alpha, model.beta = params
+#        lik = model.pruning_algorithm()
+#
+#    else:
+#        model.alpha = params[0]
+#        lik = model.pruning_algorithm()
+#    
+#    return -lik
 
 
 if __name__ == "__main__":
@@ -264,7 +261,6 @@ if __name__ == "__main__":
     from hogtie.utils import set_loglevel
     set_loglevel("DEBUG")
     TREE = toytree.rtree.imbtree(ntips=10, treeheight=1000)
-
     DATA = np.array([1, 1, 0, 0, 1, 0, 0, 0, 0, 1])
     mod = BinaryStateModel(TREE, DATA, 'ER')
     mod.optimize()
