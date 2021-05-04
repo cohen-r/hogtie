@@ -34,7 +34,7 @@ class SimulateNull():
         self.treeheight = float(self.tree.treenode.height)
 
         #high ILS
-        self.mod = ipcoal.Model(tree=self.tree, Ne=(self.treeheight ** 3))
+        self.mod = ipcoal.Model(tree=self.tree, Ne=1e8)
 
         logger.info('Initiated model')
 
@@ -43,7 +43,7 @@ class SimulateNull():
         Simulates SNPs across the input tree to create the null expectation for likelihood
         scores and compares
         """
-        self.mod.sim_snps(nsnps=10)
+        self.mod.sim_loci(nloci=1, nsites=10000)
         null_genos = self.mod.write_vcf().iloc[:, 9:].T
 
         #make sure matrix has only 0's and 1's
