@@ -14,7 +14,7 @@ from loguru import logger
 from hogtie import BinaryStateModel
 
 
-class MatrixParser(BinaryStateModel):
+class MatrixParser():
     """
     Runs BinaryStateModel on matrix columns, returns a likelihood score for each column.
     The matrix should correspond to presence/absence data corresponding to sequence variants (this
@@ -56,6 +56,9 @@ class MatrixParser(BinaryStateModel):
         self.model = model
         self.prior = prior
 
+        self.alpha = 1 / tree.treenode.height
+        self.beta = 1 / tree.treenode.height
+
         #for i in self.matrix:
         #  if i != 1 or 0:
         #        raise ValueError('Only valid trait values are 0 and 1')
@@ -70,13 +73,14 @@ class MatrixParser(BinaryStateModel):
         unique_matrix = pd.DataFrame(unique_array)
         return unique_matrix
 
-    def matrix_likelihoods(self):
+    def matrix_likelihood(self):
         """
         Gets likelihoods for each column of the matrix
         """
         likelihoods = np.empty((0,len(self.matrix.columns)),float)
         for column in self.unique_matrix:
-            lik = -np.log(self.pruning_algorithm())
+            out = BinaryStateModel(self.tree, self.unique_matrix[column], self.model)
+            lik = out.pruning_algorithm()
 
             for col in self.matrix:
                 if list(self.matrix[col]) == list(self.unique_matrix[column]):
@@ -139,14 +143,14 @@ class MatrixParser(BinaryStateModel):
             raise Exception('model must be specified as either ARD or ER')
 
         # get scaled likelihood values
-        self.log_lik = result["negLogLik"]
-        self.tree = self.tree.set_node_values(
-            'likelihood',
-            values={
-                node.idx: np.array(node.likelihood) / sum(node.likelihood)
-                for node in self.tree.idx_dict.values()
-            }
-        )
+        #self.log_lik = result["negLogLik"]
+        #self.tree = self.tree.set_node_values(
+        #    'likelihood',
+        #    values={
+        #        node.idx: np.array(node.likelihood) / sum(node.likelihood)
+        #        for node in self.tree.idx_dict.values()
+        #    }
+        #)
 
 def optim_func(params, model):
     """
@@ -165,10 +169,12 @@ def optim_func(params, model):
     return lik       
     
 if __name__ == "__main__":
+    from hogtie.utils import set_loglevel
+    set_loglevel("DEBUG")
+    
     import os
     HOGTIEDIR = os.path.dirname(os.getcwd())
     tree1 = toytree.rtree.unittree(ntips=10)
     file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
     testmatrix = MatrixParser(tree=tree1, matrix=file1, model='ARD')
-    testmatrix.matrix_likelihoods()
-    print(testmatrix.likelihoods)
+    testmatrix.optimize()
