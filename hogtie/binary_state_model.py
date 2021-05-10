@@ -35,7 +35,7 @@ class BinaryStateModel:
         Prior probability that the root state is 1 (default=0.5). Flat, uniform prior is assumed.
     """
 
-    def __init__(self, tree, data, model, prior=0.5, **kwargs):
+    def __init__(self, tree, matrix, model, prior=0.5, **kwargs):
       
         # store user inputs
         if isinstance(tree, toytree.tree):
@@ -301,12 +301,12 @@ def optim_func(params, model):
 if __name__ == "__main__":
 
     from hogtie.utils import set_loglevel
-    set_loglevel("DEBUG")
     import os
+    set_loglevel("DEBUG")
     HOGTIEDIR = os.path.dirname(os.getcwd())
     tree1 = toytree.rtree.unittree(ntips=10)
     file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
-    mod = BinaryStateModel(TREE, file1, 'ER')
+    mod = BinaryStateModel(tree1, file1, 'ER')
     mod.optimize()
 
     #DATA = np.array([1, 0, 1, 0, 1, 0, 1, 0, 1, 0])
