@@ -47,7 +47,6 @@ class MatrixParser():
         else: 
             raise Exception('tree must be either a newick string or toytree object')
 
-
         if isinstance(matrix, pd.DataFrame):
             self.matrix = matrix  
         else:
@@ -79,7 +78,7 @@ class MatrixParser():
         """
         likelihoods = np.empty((0,len(self.matrix.columns)),float)
         for column in self.unique_matrix:
-            out = BinaryStateModel(self.tree, self.unique_matrix[column], self.model)
+            out = BinaryStateModel(self.tree, self.unique_matrix[column], self.model, self.prior)
             lik = out.pruning_algorithm()
 
             for col in self.matrix:
@@ -117,7 +116,7 @@ class MatrixParser():
                 "alpha": round(estimate.x[0], 6),
                 "beta": round(estimate.x[1], 6), 
                 "Lik": round(estimate.fun, 6),            
-                "negLogLik": round(-np.log(-estimate.fun), 2),
+                #"negLogLik": round(-np.log(-estimate.fun), 2),
                 "convergence": estimate.success,
                 }
             logger.info(result)
@@ -134,7 +133,7 @@ class MatrixParser():
             result = {
                 "alpha": estimate.x[0],
                 "Lik": estimate.fun,            
-                "negLogLik": estimate.fun,
+                #"negLogLik": estimate.fun,
                 "convergence": estimate.success,
                 }
             logger.info(result)
@@ -176,5 +175,5 @@ if __name__ == "__main__":
     HOGTIEDIR = os.path.dirname(os.getcwd())
     tree1 = toytree.rtree.unittree(ntips=10)
     file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
-    testmatrix = MatrixParser(tree=tree1, matrix=file1, model='ARD')
+    testmatrix = MatrixParser(tree=tree1, matrix=file1, model='ER')
     testmatrix.optimize()
