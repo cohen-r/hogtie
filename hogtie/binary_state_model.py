@@ -68,18 +68,20 @@ class BinaryStateModel:
         if len(self.matrix.index) != self.tree.ntips:
             raise Exception('Matrix row number must equal ntips on tree')
 
-        self.unique_matrix = pd.DataFrame(np.unique(self.matrix.to_numpy(), axis=1))
+        
+        #self.unique_matrix = pd.DataFrame(np.unique(self.matrix.to_numpy(), axis=1))
 
         # set likelihoods to 1 for data at tips, and None for internal
-        trees = []
-        for column in self.unique_matrix:
-            tre = self.set_initial_likelihoods(data=self.unique_matrix[column])
-            trees.append(tre)
+        #trees = []
+        #for column in self.unique_matrix:
+        #    tre = self.set_initial_likelihoods(data=self.unique_matrix[column], tree=self.tree)
+        #    trees.append(tre)
 
-        self.tree_list = trees
+        #self.tree_list = trees
+        #print(self.tree_list)
 
-        for tre in self.tree_list:
-            logger.debug(f'tip likelihoods are {tre.get_node_values("likelihood", True, True)}')
+        #for tre in self.tree_list:
+        #    logger.debug(f'tip likelihoods are {tre.get_node_values("likelihood", True, True)}')
 
     @property
     def qmat(self):
@@ -103,6 +105,15 @@ class BinaryStateModel:
 
         return qmat
 
+    @property
+    def unique_matrix(self):
+        """
+        Gets matrix that contains only columns with unique pattern of 1's and 0's
+        """
+        matrix_array = self.matrix.to_numpy()
+        unique_array = np.unique(matrix_array, axis=1)
+        unique_matrix = pd.DataFrame(unique_array)
+        return unique_matrix
 
     def set_initial_likelihoods(self, data):
         """
@@ -118,24 +129,23 @@ class BinaryStateModel:
         valuesdict = dict(zip(keys, values))
 
         # set as .likelihood attributes on tip nodes.
-        new_tree = self.tree.set_node_values(
+        tree = self.tree.set_node_values(
             feature="likelihood", 
             values=valuesdict,
             default=None,
         )
-
-        return new_tree
+        return tree
 
         logger.debug(f"set tips values: {valuesdict}")
 
 
-    def node_conditional_likelihood(self, nidx):
+    def node_conditional_likelihood(self, tree, nidx):
         """
         Returns the conditional likelihood at a single node given the
         likelihood's of data at its child nodes.
         """
         # get the TreeNode 
-        node = self.tree.idx_dict[nidx]
+        node = tree.idx_dict[nidx]
 
         # get transition probabilities over each branch length
         prob_child0 = expm(self.qmat * node.children[0].dist)
@@ -177,7 +187,7 @@ class BinaryStateModel:
         # traverse tree to get conditional likelihood estimate at root.
         for node in tree.treenode.traverse("postorder"):
             if not node.is_leaf():
-                self.node_conditional_likelihood(node.idx)
+                self.node_conditional_likelihood(tree, node.idx)
 
         # multiply root prior times the conditional likelihood at root
         root = tree.treenode
@@ -185,35 +195,31 @@ class BinaryStateModel:
             (1 - self.prior_root_is_1) * root.likelihood[0] + 
             self.prior_root_is_1 * root.likelihood[1]
         )
-        return -np.log(lik)
+        return lik
 
     def matrix_likelihoods(self):
         """
         Gets likelihoods for each column of the matrix
         """
         likelihoods = np.empty((0,len(self.matrix.columns)),float)
-        
-        for tree in self.tree_list:
+        for col in self.unique_matrix:
+            tree = self.set_initial_likelihoods(data=self.unique_matrix[col])
             lik = self.pruning_algorithm(tree)
-            
-            #tree = tree.set_node_values(
-            #    'likelihood',
-            #    values={
-            #        node.idx: np.array(node.likelihood) / sum(node.likelihood)
-            #        for node in self.tree.idx_dict.values()
-            #    }
-            #)
 
-            for column in self.unique_matrix:
-                for col in self.matrix:
-                    if list(self.matrix[col]) == list(self.unique_matrix[column]):
-                        likelihoods = np.append(likelihoods, lik)
+            for column in self.matrix:
+                if list(self.matrix[column]) == list(self.unique_matrix[col]):
+                    likelihoods = np.append(likelihoods, lik)
 
-            self.likelihoods = pd.DataFrame(likelihoods)
+        #tree = tree.set_node_values(
+            #'likelihood',
+            #values={
+                #node.idx: np.array(node.likelihood) / sum(node.likelihood)
+                #for node in self.tree.idx_dict.values()
+            #}
+        #)     
 
-            lik_sum = sum(likelihoods)
-            return lik_sum
-
+        lik_sum = sum(likelihoods)
+        return lik_sum
 
     def optimize(self):
         """
@@ -234,7 +240,7 @@ class BinaryStateModel:
             method='L-BFGS-B',
             bounds=((0, 50), (0, 50)),
             )
-        # logger.info(estimate)
+            #logger.info(estimate)
 
         # organize into a dict
             result = {
@@ -287,6 +293,15 @@ class BinaryStateModel:
             ],
         )
         return drawing
+
+    def get_likelihoods(self):
+        """
+        Gets a dataframe of likelihoods 1 column x nrows in self.matrix that contains likelihoods
+        for each column calculated with the optimized params
+        """
+        pass
+
+
 
 
 def optim_func(params, model):
