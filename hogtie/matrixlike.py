@@ -170,10 +170,9 @@ def optim_func(params, model):
 if __name__ == "__main__":
     from hogtie.utils import set_loglevel
     set_loglevel("DEBUG")
-    
     import os
     HOGTIEDIR = os.path.dirname(os.getcwd())
     tree1 = toytree.rtree.unittree(ntips=10)
     file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
-    testmatrix = MatrixParser(tree=tree1, matrix=file1, model='ER')
+    testmatrix = MatrixParser(tree=tree1, matrix=file1, model='ARD')
     testmatrix.optimize()
