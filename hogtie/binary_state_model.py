@@ -11,10 +11,6 @@ from scipy.optimize import minimize
 from scipy.linalg import expm
 from loguru import logger
 
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/optimize
 class BinaryStateModel:
     """
     Ancestral State Reconstruction for discrete binary state characters
@@ -286,7 +282,6 @@ class BinaryStateModel:
         pass
 
 
-
 def optim_func(params, model):
     """
     Function to optimize. Takes an iterable as the first argument 
@@ -302,8 +297,6 @@ def optim_func(params, model):
         lik = model.matrix_likelihoods()
     
     return -lik
->>>>>>> origin/optimize
-
 
 if __name__ == "__main__":
 
