@@ -2,8 +2,9 @@
 
 """
 Runs BinaryStateModel on matrix of binary character state data for gwas data for the input tree.
-"""
 
+NOTE: In order to optimize sum of likelihoods, most functionalities integreted into BinaryStateModel
+"""
 
 import numpy as np
 import toytree

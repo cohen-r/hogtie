@@ -17,18 +17,20 @@ class BinaryStateModel:
     on a phylogeny ... 
     alternative names: DiscreteMarkovModel
     The model is a discrete markov model implemented as described by Pagel (1994). This model
-    is similar to that used in ace (R package, add: link); however, hogtie assumes a uniform
-    prior at the root. Hogtie is designed to run across large-matrices corresponding to genetic
-    variants identified in sequence data (kmers, snps, transcripts, etc.) and allows for visualization
-    of inferred character states and likelihoods along a tree and genome of interest, respectively.
-    Either an equal rates (ER, transition rate parameters are equal) or all rates different (ARD, 
+    is similar to that used in ace (R package, https://rdrr.io/cran/ape/man/ace.html); however, 
+    unlike ace, hogtie assumes a uniform prior at the root. Hogtie is designed to run across large-matrices
+    corresponding to genetic variants identified in sequence data (kmers, snps, transcripts, etc.) and
+    allows for visualization of inferred character states and likelihoods along a tree and genome of interest,
+    respectively. Either an equal rates (ER, transition rate parameters are equal) or all rates different (ARD, 
     transition rate parameters are unequal) can be selected.
+    
     Parameters
     ----------
     tree: newick string or toytree object
         species tree to be used. ntips = number of rows in data matrix
-    data: ndarray
-        array of integer binary data in order of node indices (0-ntips).
+    matrix: pandas.dataframe object, csv
+        matrix of 1's and 0's corresponding to presence/absence data of the sequence variant at the tips of 
+        the input tree. Row number must equal tip number. 
     model: str
          Either equal rates ('ER') or all rates different ('ARD').
     prior: float
@@ -181,14 +183,28 @@ class BinaryStateModel:
         """
         Gets likelihoods for each column of the matrix
         """
-        likelihoods = np.empty((0,len(self.matrix.columns)),float)
+        #calculate likelihoods for every unique column in self.matrix
+        likes = np.empty((0,len(self.matrix.columns)),float)
         for col in self.unique_matrix:
             tree = self.set_initial_likelihoods(data=self.unique_matrix[col])
             lik = self.pruning_algorithm(tree)
+            likes = np.append(likes, lik)
 
-            for column in self.matrix:
-                if list(self.matrix[column]) == list(self.unique_matrix[col]):
-                    likelihoods = np.append(likelihoods, lik)
+        #re-assign likelihood values corresponding to every column in self.matrix
+        likelihoods = np.empty((0,len(self.matrix.columns)),float)
+        for column in self.matrix:
+            for i in self.unique_matrix.columns:
+                if list(self.matrix[column]) == list(self.unique_matrix[i]):
+                    likelihoods = np.append(likelihoods, likes[i])
+
+        
+        #save new likelihood df
+        log_liks = np.empty((0,len(self.matrix.columns)),float)
+        for i in likelihoods:
+            log_lik = -np.log(i)
+            log_liks = np.append(log_liks, log_lik)
+        
+        self.likelihoods = pd.DataFrame(log_liks)
 
         #tree = tree.set_node_values(
             #'likelihood',
@@ -196,8 +212,8 @@ class BinaryStateModel:
                 #node.idx: np.array(node.likelihood) / sum(node.likelihood)
                 #for node in self.tree.idx_dict.values()
             #}
-        #)     
-
+        #)
+        
         lik_sum = sum(likelihoods)
         return lik_sum
 
@@ -227,7 +243,7 @@ class BinaryStateModel:
                 "alpha": round(estimate.x[0], 6),
                 "beta": round(estimate.x[1], 6), 
                 "Lik": round(estimate.fun, 6),            
-                "negLogLik": round(-np.log(-estimate.fun), 2),
+                #"negLogLik": round(-np.log(-estimate.fun), 2),
                 "convergence": estimate.success,
                 }
             logger.info(result)
@@ -244,7 +260,7 @@ class BinaryStateModel:
             result = {
                 "alpha": estimate.x[0],
                 "Lik": estimate.fun,            
-                "negLogLik": -np.log(-estimate.fun),
+                #"negLogLik": round(-np.log(-estimate.fun), 2),
                 "convergence": estimate.success,
                 }
             logger.info(result)
@@ -274,13 +290,6 @@ class BinaryStateModel:
         )
         return drawing
 
-    def get_likelihoods(self):
-        """
-        Gets a dataframe of likelihoods 1 column x nrows in self.matrix that contains likelihoods
-        for each column calculated with the optimized params
-        """
-        pass
-
 
 def optim_func(params, model):
     """
@@ -306,8 +315,11 @@ if __name__ == "__main__":
     HOGTIEDIR = os.path.dirname(os.getcwd())
     tree1 = toytree.rtree.unittree(ntips=10)
     file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
-    mod = BinaryStateModel(tree1, file1, 'ER')
+    mod = BinaryStateModel(tree1, file1, 'ARD')
+    mod.matrix_likelihoods()
+    #print(mod.likelihoods)
     mod.optimize()
+    print(mod.likelihoods)
 
     #DATA = np.array([1, 0, 1, 0, 1, 0, 1, 0, 1, 0])
     #od = BinaryStateModel(TREE, DATA, 'ARD')
