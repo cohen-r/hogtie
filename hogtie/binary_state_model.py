@@ -16,21 +16,22 @@ class BinaryStateModel:
     Ancestral State Reconstruction for discrete binary state characters
     on a phylogeny ... 
     alternative names: DiscreteMarkovModel
-    The model is a discrete markov model implemented as described by Pagel (1994). This model
+    Discrete markov model implemented as described by Pagel (1994). This model
     is similar to that used in ace (R package, https://rdrr.io/cran/ape/man/ace.html); however, 
-    unlike ace, hogtie assumes a uniform prior at the root. Hogtie is designed to run across large-matrices
-    corresponding to genetic variants identified in sequence data (kmers, snps, transcripts, etc.) and
-    allows for visualization of inferred character states and likelihoods along a tree and genome of interest,
-    respectively. Either an equal rates (ER, transition rate parameters are equal) or all rates different (ARD, 
-    transition rate parameters are unequal) can be selected.
+    unlike ace, hogtie assumes a uniform prior at the root. Hogtie is designed to run across
+    large-matrices corresponding to genetic variants identified in sequence data (kmers, snps,
+    transcripts, etc.) and allows for visualization of inferred character states and likelihoods
+    along a tree and genome of interest, respectively. Either an equal rates (ER, transition 
+    rate parameters are equal) or all rates different (ARD, transition rate parameters are unequal)
+    can be selected.
     
     Parameters
     ----------
     tree: newick string or toytree object
         species tree to be used. ntips = number of rows in data matrix
     matrix: pandas.dataframe object, csv
-        matrix of 1's and 0's corresponding to presence/absence data of the sequence variant at the tips of 
-        the input tree. Row number must equal tip number. 
+        matrix of 1's and 0's corresponding to presence/absence data of the sequence variant at
+        the tips of the input tree. Row number must equal tip number. 
     model: str
          Either equal rates ('ER') or all rates different ('ARD').
     prior: float
@@ -59,7 +60,7 @@ class BinaryStateModel:
         # set to initial values based on the tree height units.
         self.alpha = 1 / tree.treenode.height
         self.beta = 1 / tree.treenode.height
-        self.log_lik = 0.
+        self.likelihoods = pd.DataFrame()
 
         if len(self.matrix.index) != self.tree.ntips:
             raise Exception('Matrix row number must equal ntips on tree')
@@ -181,10 +182,15 @@ class BinaryStateModel:
 
     def matrix_likelihoods(self):
         """
-        Gets likelihoods for each column of the matrix
+        Gets likelihoods for each column of the matrix and sums them.
+
+        NOTES:
+        -pre-optimization this function works correctly
+        -the way that the sum is being calculated leads to inconsistent and bad
+        answers post-optimization
         """
         #calculate likelihoods for every unique column in self.matrix
-        likes = np.empty((0,len(self.matrix.columns)),float)
+        likes = np.empty((0,len(self.unique_matrix.columns)),float)
         for col in self.unique_matrix:
             tree = self.set_initial_likelihoods(data=self.unique_matrix[col])
             lik = self.pruning_algorithm(tree)
@@ -196,15 +202,14 @@ class BinaryStateModel:
             for i in self.unique_matrix.columns:
                 if list(self.matrix[column]) == list(self.unique_matrix[i]):
                     likelihoods = np.append(likelihoods, likes[i])
-
         
-        #save new likelihood df
         log_liks = np.empty((0,len(self.matrix.columns)),float)
         for i in likelihoods:
             log_lik = -np.log(i)
             log_liks = np.append(log_liks, log_lik)
         
-        self.likelihoods = pd.DataFrame(log_liks)
+        self.likelihoods['lik'] = likelihoods
+        self.likelihoods['log_lik'] = log_liks
 
         #tree = tree.set_node_values(
             #'likelihood',
@@ -214,7 +219,7 @@ class BinaryStateModel:
             #}
         #)
         
-        lik_sum = sum(likelihoods)
+        lik_sum = sum(log_liks)
         return lik_sum
 
     def optimize(self):
@@ -226,15 +231,16 @@ class BinaryStateModel:
         tree heights (e.g., 1) the max should likely be higher. If the 
         estimated parameters is at the max bound we should report a 
         logger.warning(message).
-        """  
 
+        Does not optimize correctly...
+        """  
         if self.model == 'ARD':
             estimate = minimize(
             fun=optim_func,
             x0=np.array([self.alpha, self.beta]),
             args=(self,),
             method='L-BFGS-B',
-            bounds=((0, 50), (0, 50)),
+            bounds=((1e-15, 50), (1e-15, 50)),
             )
             #logger.info(estimate)
 
@@ -242,7 +248,7 @@ class BinaryStateModel:
             result = {
                 "alpha": round(estimate.x[0], 6),
                 "beta": round(estimate.x[1], 6), 
-                "Lik": round(estimate.fun, 6),            
+                "Lik sum": round(estimate.fun, 6),            
                 #"negLogLik": round(-np.log(-estimate.fun), 2),
                 "convergence": estimate.success,
                 }
@@ -254,12 +260,12 @@ class BinaryStateModel:
                 x0=np.array([self.alpha]),
                 args=(self,),
                 method='L-BFGS-B',
-                bounds=[(0, 50)],
+                bounds=[(1e-15, 50)],
             )
 
             result = {
                 "alpha": estimate.x[0],
-                "Lik": estimate.fun,            
+                "Lik sum": estimate.fun,            
                 #"negLogLik": round(-np.log(-estimate.fun), 2),
                 "convergence": estimate.success,
                 }
@@ -317,7 +323,6 @@ if __name__ == "__main__":
     file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
     mod = BinaryStateModel(tree1, file1, 'ARD')
     mod.matrix_likelihoods()
-    #print(mod.likelihoods)
     mod.optimize()
     print(mod.likelihoods)
 

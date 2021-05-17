@@ -12,4 +12,4 @@ from hogtie.simulate import SimulateNull
 
 __version__ = "0.0.4"
 
-set_loglevel("INFO")
+set_loglevel("DEBUG")
