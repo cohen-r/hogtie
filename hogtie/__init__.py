@@ -8,7 +8,7 @@ Binary state character phylogenetic likelihood calculations
 from hogtie.utils import set_loglevel
 from hogtie.binary_state_model import DiscreteMarkovModel
 from hogtie.matrixlike import MatrixParser
-from hogtie.simulate import SimulateNull
+from hogtie.simulate import NullDistribution
 
 __version__ = "0.0.4"
 

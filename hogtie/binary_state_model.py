@@ -29,9 +29,9 @@ class DiscreteMarkovModel:
     ----------
     tree: newick string or toytree object
         species tree to be used. ntips = number of rows in data matrix
-    matrix: pandas.dataframe object, csv
+    data: pandas.dataframe object, csv (re-implement csv read-in)
         matrix of 1's and 0's corresponding to presence/absence data of the sequence variant at
-        the tips of the input tree. Row number must equal tip number. 
+        the tips of the input tree. Column number must equal the number of tips on the input tree. 
     model: str
          Either equal rates ('ER') or all rates different ('ARD').
     prior: float
@@ -177,8 +177,8 @@ class DiscreteMarkovModel:
             (1. - self.prior_root_is_1) * root.likelihood[:, 0] + 
             self.prior_root_is_1 * root.likelihood[:, 1]
         )
+        
         return lik[self.inverse]
-
 
     def optimize(self):
         """
@@ -237,7 +237,7 @@ def optim_func(params, model):
 
 
 if __name__ == "__main__":
-    #import ipcoal
+    import ipcoal
     from hogtie.utils import set_loglevel
     set_loglevel("DEBUG")
     import os
@@ -248,7 +248,7 @@ if __name__ == "__main__":
     #print("----------------")
 #
     ## GENERATE SOME BINARY DATA
-    #TREE = toytree.rtree.baltree(ntips=12, treeheight=1e6)
+    TREE = toytree.rtree.baltree(ntips=12, treeheight=1e6)
     #MODEL = ipcoal.Model(TREE, Ne=20000, mut=1e-8, seed=123)
     #MODEL.sim_snps(10)
 #
@@ -260,14 +260,18 @@ if __name__ == "__main__":
     # FIT PARAMS TO DATA on TREE with height=1
     #TREE_ONE = TREE.mod.node_scale_root_height(1)
     
-    HOGTIEDIR = os.path.dirname(os.getcwd())
-    tree1 = toytree.rtree.unittree(ntips=10)
-    file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
+    MODEL = ipcoal.Model(TREE, Ne=20000, mut=1e-8, seed=123)
+    MODEL.sim_snps(10)
+    DATA = MODEL.write_vcf().iloc[:, 9:]
+    DATA[(DATA == 2) | (DATA == 3)] = 1
 
-    TEST = DiscreteMarkovModel(tree1, file1, 'ARD', prior=0.5)
+    # FIT PARAMS TO DATA on TREE with height=1
+    TREE_ONE = TREE.mod.node_scale_root_height(1)
+    
+    TEST = DiscreteMarkovModel(TREE_ONE, DATA, 'ARD', prior=0.5)
     TEST.optimize()
     print(TEST.model_fit)
-    print(f"sum of edge lengths: {TREE_ONE.get_node_values('dist').sum()}")
+    #print(f"sum of edge lengths: {TREE_ONE.get_node_values('dist').sum()}")
 
     # # view results next to data.
     # TEST.data["loglik"] = TEST.log_likelihoods

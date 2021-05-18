@@ -7,116 +7,148 @@ generating null data and testing observations against it
 import ipcoal
 import toytree
 import toyplot
+from scipy.linalg import expm
 from loguru import logger
 import numpy as np
 import pandas as pd
 from hogtie import DiscreteMarkovModel
 
-class SimulateNull():
+class NullDistribution:
     """
-    Compare data to expectations
+    Calculates null likelihoods using optimized alpha and beta values
 
-    TO DO: 
-    - integrate genealogy-based reordering function before running MatrixParser on null sim
-    - why isn't sim_loci working within the function?
-    - optimizing binary state model with simulation is giving really high likelihood scores
+    Now: uses ARD, will implement ER once functional
     """
-    def __init__(self,
-        tree,
-        matrix,
-        model=None,
-        prior=0.5,
-        null=None, #user can select high ILS, slow mutation rate, etc. (need to flesh this idea out more)
-        significance_level=0): #integer multuplied by sd to get sig level
+    def __init__(self, tree, alpha, beta, prior=0.5):
+        # store user inputs
+        self.tree = tree
+        #self.model = model
+        self.prior_root_is_1 = prior
+        self.alpha = alpha
+        self.beta = beta
         
-        if isinstance(tree, toytree.tree):
-            self.tree = tree
-        elif isinstance(tree, str):
-            self.tree = toytree.tree(tree, tree_format=0)
-        else: 
-            raise Exception('tree must be either a newick string or toytree object')
-
-        self.matrix = matrix
-        self.model = model
-        self.prior = prior
-        self.significance_level = significance_level
-
-
-        #derived model parameters
-        self.treeheight = float(self.tree.treenode.height)
-
-        #parameters to be set
-        self.high_lik = 0
-
-        #create an empty dataframe to store values
-        self.likelihoods = pd.DataFrame()
-
-        #high ILS, no introgression
-        self.mod = ipcoal.Model(tree=self.tree, Ne=1e8)
-        logger.info('Initiated model')
-
-    #@property
-    def experimental_likelihoods(self):
-        """
-        doc string
-        """
-        exp = BinaryStateModel(self.tree, self.matrix, self.model, self.prior)
-        exp.optimize()
-        logger.info(f'Optimized experimental values, alpha = {exp.alpha} and beta = {exp.beta}')
+        # set likelihoods to 1 for data at tips, and None for internal
+        #self.set_initial_likelihoods()
         
-        #save new likelihood df
-        log_liks = np.empty((0,len(exp.matrix.columns)),float)
-        for i in exp.likelihoods['lik']:
-            log_lik = -np.log(i)
-            log_liks = np.append(log_liks, log_lik)
+        #set qmat, assuming all rates different model
+        self.qmat = np.array([
+                [-alpha, alpha],
+                [beta, -beta]
+               ])
 
-        #save to new dataframe    
-        self.likelihoods['liks'] = exp.likelihoods['lik']
-        self.likelihoods['negloglik'] = log_liks
+        self.likelihoods = np.empty((0,tree.ntips),float)
 
-    def null(self):
+        #initiate model and simulate SNPs using the input species tree
+        self.mod = ipcoal.Model(tree=self.tree, Ne=1e6)
+        self.mod.sim_snps(10)
+        logger.info('Initiated model, simulated SNPs')
+        
+    def set_initial_likelihoods(self, data):
         """
-        Simulates SNPs across the input tree to create the null expectation for likelihood
-        scores and compares
+        Sets the observed states at the tips as attributes of the nodes.
         """
-        self.mod.sim_snps(nsnps=10)
-        null_genos = self.mod.write_vcf().iloc[:, 9:].T
+        # get values as lists of [0, 1] or [1, 0]
+        values = ([float(1 - i), float(i)] for i in data)
+        # get range of tip idxs (0-ntips)
+        keys = range(0, len(data))
+        # map values to tips {0:x, 1:y, 2:z...}
+        valuesdict = dict(zip(keys, values))
+        # set as .likelihood attributes on tip nodes.
+        self.tree = self.tree.set_node_values(
+            feature="likelihood", 
+            values=valuesdict,
+            default=None,
+        )
+        
+    def node_conditional_likelihood(self, nidx):
+        """
+        Returns the conditional likelihood at a single node given the
+        likelihood's of data at its child nodes.
+        """
+        # get the TreeNode 
+        node = self.tree.idx_dict[nidx]
+        # get transition probabilities over each branch length
+        prob_child0 = expm(self.qmat * node.children[0].dist)
+        prob_child1 = expm(self.qmat * node.children[1].dist)
+        # likelihood that child 0 observation occurs if anc==0
+        child0_is0 = (
+            prob_child0[0, 0] * node.children[0].likelihood[0] + 
+            prob_child0[0, 1] * node.children[0].likelihood[1]
+        )
+        # likelihood that child 1 observation occurs if anc==0
+        child1_is0 = (
+            prob_child1[0, 0] * node.children[1].likelihood[0] + 
+            prob_child1[0, 1] * node.children[1].likelihood[1]
+        )
+        anc_lik_0 = child0_is0 * child1_is0
+        # likelihood that child 0 observation occurs if anc==1
+        child0_is1 = (
+            prob_child0[1, 0] * node.children[0].likelihood[0] + 
+            prob_child0[1, 1] * node.children[0].likelihood[1]
+        )
+        child1_is1 = (
+            prob_child1[1, 0] * node.children[1].likelihood[0] + 
+            prob_child1[1, 1] * node.children[1].likelihood[1]
+        )
+        anc_lik_1 = child0_is1 * child1_is1
+        # set estimated conditional likelihood on this node
+        node.likelihood = [anc_lik_0, anc_lik_1]
+        
+    def pruning_algorithm(self):
+        """
+        Traverse tree from tips to root calculating conditional 
+        likelihood at each internal node on the way, and compute final
+        conditional likelihood at root based on priors for root state.
+        """
+        # traverse tree to get conditional likelihood estimate at root.
+        for node in self.tree.treenode.traverse("postorder"):
+            if not node.is_leaf():
+                self.node_conditional_likelihood(node.idx)
+        # multiply root prior times the conditional likelihood at root
+        root = self.tree.treenode
+        lik = (
+            (1 - self.prior_root_is_1) * root.likelihood[0] + 
+            self.prior_root_is_1 * root.likelihood[1]
+        )
+        return -np.log(lik)
 
-        #make sure matrix has only 0's and 1's
-        for col in null_genos:
-            null_genos[col] = null_genos[col].replace([2,3],1)
+    def get_likelihoods(self):
+        """
+        mod must be an ipcoal model object
+        objective: make a unique dataframe for each genealogy with the sites that follow
+        that genealogy
+        """
+        vcf = self.mod.write_vcf().iloc[:,9:].T
+        
+        tree_list = []
+        for idx in self.mod.df.index:
+            genealogy = toytree.tree(self.mod.df.iloc[idx, 6], tree_format=0)
+            tree_list.append(genealogy)
+            
+        for col in vcf.columns:
+            data = vcf[col].reindex(tree_list[col].get_tip_labels())
+            self.set_initial_likelihoods(data)
 
-        #run Binary State model on the matrix and get likelihoods
-        null = BinaryStateModel(tree=self.tree, matrix=null_genos, model=self.model)
-        null.optimize()
+            log_lik = self.pruning_algorithm()
+            self.likelihoods = np.append(self.likelihoods, log_lik)
 
-        #get negloglikes for the null values
-        log_liks = np.empty((0,len(null.matrix.columns)),float)
-        for i in null.likelihoods['lik']:
-            log_lik = -np.log(i)
-            log_liks = np.append(log_liks, log_lik)
-
+    def get_dist(self):
+        """
+        """
         #get z -scores null likelihood expectations
-        null_std = log_liks.std()
-        null_mean = log_liks.mean()
+        null_std = self.likelihoods.std()
+        null_mean = self.likelihoods.mean()
         
         #get the likelihood value that corresponds 2 standard deviations above the null mean
         self.high_lik = null_mean + (self.significance_level * null_std)
 
-        #devs = [] #would prefer to append to an empty np.array
-        #for like in list(lik_calc.likelihoods[0]):
-            #if like >= self.high_lik:
-                #devs.append(1)
-            #else:
-                #devs.append(0)
-        #lik_calc.likelihoods['deviation_score'] = np.array(devs)
     
     def genome_graph(self):
         """
         Graphs rolling average of likelihoods along the linear genome, identifies 
         regions that deviate significantly from null expectations
 
-        TO DO: change color of outliers
+        TO DO: fix
         """
 
         self.likelihoods['rollingav']= self.likelihoods['negloglikes'].rolling(50).mean()
@@ -137,14 +169,16 @@ class SimulateNull():
         b.hlines(self.high_lik, style={"stroke": "red", "stroke-width": 2});
 
 if __name__ == "__main__":
-    testtree = toytree.rtree.unittree(ntips=10, treeheight=1e5)
-    import os
-    HOGTIEDIR = os.path.dirname(os.getcwd())
-    file1 = os.path.join(HOGTIEDIR, "sampledata", "testmatrix.csv")
-    file2 = os.path.join(HOGTIEDIR, "sampledata", "testtree.txt")    
-    test = SimulateNull(tree=file2, model='ARD', matrix=file1)
-    test.experimental_likelihoods()
-    test.null()
-    #print(test.experimental_likelihoods)
-    #test.null()
-    #test.genome_graph()
+    #get 'experimental' data and run the discretemarkovmodel to get alpha&beta
+    TREE = toytree.rtree.baltree(ntips=12, treeheight=1e6)
+    MODEL = ipcoal.Model(TREE, Ne=20000, mut=1e-8, seed=123)
+    MODEL.sim_snps(10)
+    DATA = MODEL.write_vcf().iloc[:, 9:]
+    DATA[(DATA == 2) | (DATA == 3)] = 1
+    TREE_ONE = TREE.mod.node_scale_root_height(1)
+    TEST = DiscreteMarkovModel(TREE_ONE, DATA, 'ARD', prior=0.5)
+    TEST.optimize()
+
+    null_test=NullDistribution(TREE, TEST.alpha, TEST.beta)
+    null_test.get_likelihoods()
+    print(null_test.likelihoods)
