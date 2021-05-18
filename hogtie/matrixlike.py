@@ -12,7 +12,7 @@ import toyplot
 import pandas as pd
 from scipy.optimize import minimize
 from loguru import logger
-from hogtie import BinaryStateModel
+from hogtie import DiscreteMarkovModel
 
 
 class MatrixParser():

@@ -10,7 +10,7 @@ import toyplot
 from loguru import logger
 import numpy as np
 import pandas as pd
-from hogtie import BinaryStateModel
+from hogtie import DiscreteMarkovModel
 
 class SimulateNull():
     """
