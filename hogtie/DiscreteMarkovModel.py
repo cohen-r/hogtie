@@ -179,6 +179,7 @@ class DiscreteMarkovModel:
         )
         
         return lik[self.inverse]
+        
 
     def optimize(self):
         """
@@ -268,7 +269,7 @@ if __name__ == "__main__":
     # FIT PARAMS TO DATA on TREE with height=1
     TREE_ONE = TREE.mod.node_scale_root_height(1)
     
-    TEST = DiscreteMarkovModel(TREE_ONE, DATA, 'ARD', prior=0.5)
+    TEST = DiscreteMarkovModel(TREE, DATA, 'ARD', prior=0.5)
     TEST.optimize()
     print(TEST.model_fit)
     #print(f"sum of edge lengths: {TREE_ONE.get_node_values('dist').sum()}")
