@@ -15,20 +15,27 @@ import numpy as np
 
 class NullDistribution:
     """
-    Parameterizes the model by simulating a distribution of genealogies and optimizing
-    transition rate parameters in a Discrete Markov Model 
+    Simulates a distribution of genealogies and optimized transition rate parameters in 
+    Discrete Markov Model based on
+
+    Parameters:
+    ===========
+    tree (newick string or toytree object):
+        species tree to be used. ntips = number of rows in data matrix
+    model (str):
+         Either equal rates ('ER') or all rates different ('ARD').
+    prior (float):
+        Prior probability that the root state is 1 (default=0.5). Flat, uniform prior is assumed.
 
     TO DO:
-    -this class uses ARD, will implement ER once functional
     -check on alpha/beta calculations
     -Do we need to optimize this or should we just use the optimized alpha/beta from DiscreteMarkovModel
     -Or, alternatively, should the alpha/beta from this be used in DiscreteMarkovModel
     """
-    def __init__(self, tree, significance_level=0, prior=0.5):
+    def __init__(self, tree, model, prior=0.5):
         # store user inputs
         self.tree = tree
-        self.significance_level = significance_level
-        #self.model = model
+        self.model = model
         self.prior_root_is_1 = prior
 
         #set alpha & beta (to be optimized)
@@ -70,6 +77,8 @@ class NullDistribution:
         that genealogy
         """
         vcf = self.mod.write_vcf().iloc[:,9:].T
+        vcf[(vcf == 2) | (vcf == 3)] = 1
+
         
         tree_list = []
         #likelihoods = np.empty((0,self.tree.ntips),float)
@@ -91,10 +100,19 @@ class NullDistribution:
         matrix given the values currently set on .alpha and .beta.
         """
         
-        self.qmat = np.array([
-            [-self.alpha, self.alpha],
-            [self.beta, -self.beta]
-           ])
+        if self.model == 'ER':
+            self.qmat = np.array([
+                [-self.alpha, self.alpha],
+                [self.alpha,  -self.alpha],
+                ])
+        
+        elif self.model == 'ARD':
+            self.qmat = np.array([
+                [-self.alpha, self.alpha],
+                [self.beta, -self.beta]
+               ])
+        else:
+            raise Exception("model must be specified as either 'ER' or 'ARD'")
        
         
     def node_conditional_likelihood(self, tree, nidx):
@@ -166,13 +184,23 @@ class NullDistribution:
         Optimizing across the distribution of 
         """  
         
-        estimate = minimize(
-            fun=optim_func,
-            x0=np.array([self.alpha, self.beta]),
-            args=(self,),
-            method='L-BFGS-B',
-            bounds=((1e-12, 500), (1e-12, 500)),
-        )
+        if self.model == 'ARD':
+            estimate = minimize(
+                fun=optim_func,
+                x0=np.array([self.alpha, self.beta]),
+                args=(self,),
+                method='L-BFGS-B',
+                bounds=((1e-12, 500), (1e-12, 500)),
+            )
+
+        elif self.model == 'ER':
+            estimate = minimize(
+                fun=optim_func,
+                x0=np.array([self.alpha]),
+                args=(self,),
+                method='L-BFGS-B',
+                bounds=[(1e-12, 50)],
+            )
         
         # store results
         self.alpha = estimate.x[0]
@@ -188,35 +216,6 @@ class NullDistribution:
         self.set_qmat()
         self.log_likelihoods = -np.log(self.get_likelihoods())
 
-    def genome_graph(self):
-        #"""
-        #Graphs rolling average of likelihoods along the linear genome, identifies 
-        #regions that deviate significantly from null expectations
-#
-        #TO DO: fix
-        #"""
-#       #get z -scores null likelihood expectations
-        null_std = null.likelihoods.std()
-        null_mean = null.likelihoods.mean()
-    
-        #get the likelihood value that corresponds 2 standard deviations above the null mean
-        high_lik = null_mean + (self.significance_level * null_std)
-        #self.likelihoods['rollingav']= self.likelihoods['negloglikes'].rolling(50).mean()
-#
-        #likelihood_density_scores = []
-        #for i in self.likelihoods.index:
-            #end = i + 49
-            #dens = self.likelihoods.iloc[i:end,1]
-            #likelihood_density_scores.append(dens)
-#        
-        a,b,c = toyplot.plot(
-            likelihood_density_scores,
-            width = 500,
-            height=500,
-            color = 'blue',
-        )
-#
-        b.hlines(high_lik, style={"stroke": "red", "stroke-width": 2});
 
 def optim_func(params, model):
     """
@@ -235,7 +234,7 @@ if __name__ == "__main__":
     #get 'experimental' data and run the discretemarkovmodel to get alpha&beta
     TREE = toytree.rtree.baltree(ntips=12, treeheight=1e6)
     TREE_ONE = TREE.mod.node_scale_root_height(1)
-    null_test=NullDistribution(TREE_ONE)
+    null_test=NullDistribution(TREE_ONE, "ARD")
     null_test.optimize()
     print(null_test.model_fit)
     print(null_test.log_likelihoods)

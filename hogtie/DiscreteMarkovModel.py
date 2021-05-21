@@ -25,8 +25,8 @@ class DiscreteMarkovModel:
     rate parameters are equal) or all rates different (ARD, transition rate parameters are unequal)
     can be selected.
     
-    Parameters
-    ----------
+    Parameters:
+    ===========
     tree: newick string or toytree object
         species tree to be used. ntips = number of rows in data matrix
     data: pandas.dataframe object, csv (re-implement csv read-in)
